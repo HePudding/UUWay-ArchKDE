@@ -8,10 +8,15 @@
 ![GNOME 46 Wayland](https://img.shields.io/badge/GNOME_46-Wayland-4A86CF?logo=gnome&logoColor=white)
 ![NVIDIA NVENC](https://img.shields.io/badge/NVIDIA-NVENC-76B900?logo=nvidia&logoColor=white)
 ![Wine 11](https://img.shields.io/badge/Wine-11-A30000)
-![Status](https://img.shields.io/badge/状态-正式版-22c55e)
+![Arch Linux](https://img.shields.io/badge/Arch_Linux-KDE_Wayland-1793D1?logo=archlinux&logoColor=white)
+![Status](https://img.shields.io/badge/本_fork-实验性适配-f59e0b)
 ![License AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-0ea5e9)
 
 </div>
+
+> **这是 [GaryOAO/UUWay](https://github.com/GaryOAO/UUWay) 的 Arch Linux / KDE Wayland 适配 fork。**
+> 已实测远程画面、鼠标键盘、手机中文输入和系统声音。KDE 默认将真实指针画进视频，已验证解决仅移动鼠标时闪烁和指针消失的问题。
+> Arch 用户请从下方的 [Arch / KDE 安装](#arch-linux--kde-wayland本-fork-的实验性适配) 开始；原上游 Ubuntu 安装方法保留在后面。
 
 > 发布包同时提供 NVIDIA NVENC 与 AMD VA-API H.264/HEVC。安装时优先验证 NVIDIA，失败后自动验证 AMD；不会自动安装或切换显卡驱动。AMD 使用内存中转，下文零拷贝和性能描述仅适用于 NVIDIA。
 
@@ -22,10 +27,11 @@
 | UU 功能 | Linux 上 | 说明 |
 | --- | :---: | --- |
 | 🎞️ 画面串流 | ✅ | NVIDIA 零拷贝 + NVENC，或 AMD VA-API 内存中转 |
-| 🖱️ 鼠标指针 | ✅ | 手机上显示你本机真实的光标主题，放大画面也跟随指针 |
+| 🖱️ 鼠标指针 | ✅ | KDE 将真实指针画进视频；GNOME 保留独立光标元数据路径 |
 | ⌨️ 键盘与鼠标 | ✅ | 包括 Win / ⌘ 键，经 libei / uinput 注入 |
 | 🀄 手机输入法 | ✅ | 中文直接提交到当前输入框（Fcitx5） |
-| 🖥️ 分辨率 · 刷新率 · 缩放 | ✅ | UUWay 和 UU 客户端都可选择 Linux 已公布的模式；切换期间保留事务保护，失败会自动回滚 |
+| 🖥️ 分辨率 · 刷新率 · 缩放 | ⚠️ | KDE 使用本机当前模式，暂不支持远端切换；GNOME 保留模式切换和失败回滚 |
+| 🔊 系统声音 | ✅ | KDE 自动把此 UU Wine 前缀的录音流接到系统播放声音，不改变其他应用的麦克风 |
 | 💻 **远程终端** | ✅ | 打开的是 Linux 登录 shell，会话常驻、可以多开 |
 | 📋 剪贴板 | ✅ | 文本双向实时同步 |
 | 📁 文件：手机 → 电脑 | ✅ | 粘贴时才传输，下载完成前粘贴会等待 |
@@ -65,17 +71,61 @@ UUWay 是一层**适配层**：UU 照常调用它在任何一台 Windows 电脑�
 
 ## Arch Linux + KDE Wayland（本 fork 的实验性适配）
 
-本 fork 新增 KDE 单显示器适配，已在 Arch Linux、Plasma 6.8、RTX 5070 Ti 上验证屏幕采集、键鼠和手机中文输入。
+本 fork 新增 KDE 单显示器适配，已在 Arch Linux、Plasma 6.8、PipeWire 1.6.9、RTX 5070 Ti、Wine 11.0 上实测。
 保留本机 4K 160Hz / 170% 缩放；显示桥接接受最高 360Hz 的实际模式，不代表远端能以该帧率播放。
 KDE 目前只枚举本机当前模式，不支持从远端改变分辨率、刷新率或缩放；不支持多显示器、旋转和 HDR。
 
+准备好支持 NVENC 的 NVIDIA 驱动，并启用 Arch 的 multilib 软件仓库。以普通用户运行：
+
 ```bash
+git clone https://github.com/HePudding/UUWay.git
+cd UUWay
 python scripts/prepare-arch.py
 python scripts/uuway_cli.py setup --installer /path/to/UURemote_Setup.exe
 ```
 
 准备脚本下载并校验固定版本的上游运行时和独立 Wine 11.0，再从本 fork 重编译改动组件。
 安装时仍需本人登录 UU、允许屏幕和文字服务授权。细节和验证范围见 [Arch / KDE 安装说明](docs/arch-kde.md)。
+
+### 使用、升级与鼠标设置
+
+```bash
+# 检查当前安装
+python scripts/uuway_cli.py doctor
+
+# 拉取本 fork 更新；源码改动后重新准备组件，再刷新运行时
+git pull --ff-only
+python scripts/prepare-arch.py
+python scripts/uuway_cli.py refresh
+```
+
+`refresh` 会短暂断开远程连接。保留此仓库目录，用户服务需要读取其中的脚本。
+**Arch 不要使用上游的 `uuway update install`，它安装的是 Debian 软件包。**
+
+- KDE 使用 `embedded` 光标模式；如果旧配置仍是 `metadata`，在 UUWay 控制台中切到画面内嵌指针模式。
+- 手机中文输入依赖 Fcitx5 插件。安装后若输入无效，完全退出旧 Fcitx5 实例再启动，确认 `~/.local/state/uurb/ime.sock` 存在。
+- UU 虚拟鼠标名为 **UURB Native Pointer**。可在 KDE 鼠标设置中单独调整速度和加速度，不影响实体鼠标。
+- 系统声音跟随当前默认播放设备；无需把全局默认麦克风改成监听源。
+
+### 重启后自动上线（无人值守）
+
+UUWay 在已登录的桌面会话里运行。需要重启后自动上线时，先配置登录管理器自动登录 KDE，再启用用户服务：
+
+```bash
+systemctl --user enable uu-native-display.service uu-native-text.service uu-native-bridge.service
+```
+
+使用 **Plasma Login Manager** 的主机可在 `/etc/plasmalogin.conf` 配置：
+
+```ini
+[Autologin]
+Session=plasma.desktop
+User=你的Linux用户名
+```
+
+SDDM 或 GDM 请使用各自的自动登录设置；上游 `uuway autologin on` 针对 GDM，不适用于 Plasma Login Manager。
+同时在 KDE 电源管理中关闭接通电源时的自动休眠。自动登录会让本机前的人无需登录密码就能进入桌面。
+本次主机已检查自动登录配置、服务开机启动及不自动休眠，**尚未实际重启验证上线**。
 
 ## 🚀 原上游 Ubuntu 安装方式
 

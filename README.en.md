@@ -8,10 +8,15 @@
 ![GNOME 46 Wayland](https://img.shields.io/badge/GNOME_46-Wayland-4A86CF?logo=gnome&logoColor=white)
 ![NVIDIA NVENC](https://img.shields.io/badge/NVIDIA-NVENC-76B900?logo=nvidia&logoColor=white)
 ![Wine 11](https://img.shields.io/badge/Wine-11-A30000)
-![Status](https://img.shields.io/badge/status-stable-22c55e)
+![Arch Linux](https://img.shields.io/badge/Arch_Linux-KDE_Wayland-1793D1?logo=archlinux&logoColor=white)
+![Status](https://img.shields.io/badge/fork-experimental-f59e0b)
 ![License AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-0ea5e9)
 
 </div>
+
+> This is an experimental Arch Linux / KDE Wayland fork of [GaryOAO/UUWay](https://github.com/GaryOAO/UUWay).
+> Remote video, embedded pointer, keyboard/mouse, phone IME and system audio have been tested on a single NVIDIA output at 4K 160Hz with scale 1.7.
+> Start with the [Arch / KDE guide](docs/arch-kde.md) and the updated [Chinese README](README.md). The Ubuntu instructions below describe the upstream installation.
 
 > Release packages include NVIDIA NVENC and AMD VA-API H.264/HEVC. Installation probes NVIDIA first, then verifies AMD; it never installs or switches GPU drivers. AMD uses host-memory copies, so zero-copy and performance claims apply only to NVIDIA.
 
