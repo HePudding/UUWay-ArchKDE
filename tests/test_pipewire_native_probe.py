@@ -132,7 +132,7 @@ class NativePipewireProbeTests(unittest.TestCase):
         # A superseded buffer is recycled, never encoded, and still feeds its cursor metadata.
         supersede = source[source.index('static void supersede_frame'):source.index('static void process(void *opaque)')]
         self.assertIn('uurb_cursor_metadata', supersede)
-        self.assertLess(supersede.index('uurb_cursor_metadata'), supersede.index('pw_stream_queue_buffer'))
+        self.assertLess(supersede.index('uurb_cursor_metadata'), supersede.index('return_frame'))
         for forbidden in ('uurb_capture_encoder_frame', 'uurb_capture_encoder_cursor_frame', 'record_delivery'):
             self.assertNotIn(forbidden, supersede)
         self.assertIn('\\"superseded_frames\\":%u', source)

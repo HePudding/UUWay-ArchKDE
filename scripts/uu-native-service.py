@@ -11,6 +11,8 @@ import signal
 import shutil
 import subprocess
 import time
+from native_audio import AudioMonitor
+from native_desktop import is_kde
 
 ROOT = Path(__file__).resolve().parents[1]
 spec = importlib.util.spec_from_file_location('native_service_trial', ROOT / 'scripts/uu-native-trial.py')
@@ -539,13 +541,17 @@ def run(config_path, preserve_display_session=False, allow_display_reconfigure=F
     trial.private_directory(config_path.parent)
     config = trial.state_tools.read_private(config_path)
     names = {'schema', 'prefix', 'bundle', 'restore_state', 'state_parent', 'text_socket', 'cursor_mode'}
-    if set(config) != names or config['schema'] != 1 or config['cursor_mode'] not in ('metadata', 'embedded', 'composited'):
+    if (set(config) not in (names, names | {'backend'}) or
+            config.get('backend', 'nvidia') not in ('nvidia', 'amd') or
+            config['schema'] != 1 or config['cursor_mode'] not in ('metadata', 'embedded', 'composited')):
         raise ValueError('Unreviewed native service configuration')
     for name in names - {'schema', 'cursor_mode'}:
         if not isinstance(config[name], str) or not Path(config[name]).is_absolute():
             raise ValueError('Native service requires absolute configured paths')
     bundle = Path(config['bundle'])
     verified = trial.bundle_tools.verify(bundle)
+    if config.get('backend', verified.get('backend', 'nvidia')) != verified.get('backend', 'nvidia'):
+        raise ValueError('Configured GPU backend does not match the verified bundle')
     # Reapply a custom/default cover after every bridge restart. This used to
     # happen only in the one-time Wine mapping phase, so changes made from the
     # console survived in JSON but never reached HKCU after a restart.
@@ -568,7 +574,10 @@ def run(config_path, preserve_display_session=False, allow_display_reconfigure=F
     previous = {s: signal.signal(s, request_stop) for s in (signal.SIGTERM, signal.SIGINT)}
     terminal_bridge = TerminalBridge(Path(config['prefix']), Path(config['state_parent']))
     clipboard_bridge = ClipboardBridge(Path(config['prefix']), Path(config['state_parent']))
+    audio = AudioMonitor(Path(config['prefix'])) if is_kde() else None
     try:
+        if audio is not None:
+            audio.start()
         if terminal_bridge.start():
             trial.event('native_terminal_bridge_ready')
         if clipboard_bridge.start():
@@ -601,6 +610,8 @@ def run(config_path, preserve_display_session=False, allow_display_reconfigure=F
                 while not stopping and time.monotonic() < deadline:
                     time.sleep(min(0.05, max(0, deadline - time.monotonic())))
     finally:
+        if audio is not None:
+            audio.stop()
         try:
             clipboard_bridge.stop()
             terminal_bridge.stop()

@@ -188,7 +188,8 @@ PRESET_INPUT_CONTRACT = INPUT_CONTRACT
 PINNED_MAIN_SCRIPTS = {('scripts/' + name): ('scripts/' + name) for name in (
     'uu-native-service.py', 'uu-native-trial.py', 'uu-native-capture-broker.py',
     'probe-wayland-portal.py', 'native_runtime_state.py',
-    'native_display_confirmation.py', 'package-uu-native-runtime.py')}
+    'native_display_confirmation.py', 'package-uu-native-runtime.py',
+    'native_desktop.py', 'native_display_kde.py', 'native_audio.py')}
 # The supervisor applies the default cover from inside its immutable bundle.
 # Keep the artwork beside the pinned Python entrypoints so a source-only
 # repack cannot accidentally point a new service at a missing development
@@ -494,6 +495,14 @@ def verify(directory):
         # remain verifiable and reusable; new releases always carry it.
         if 'assets/uuway-penguin.bmp' not in manifest['files']:
             inputs.pop('assets/uuway-penguin.bmp', None)
+        # Older immutable bundles predate the desktop abstraction. Both new
+        # modules are mandatory as a pair whenever either one is present.
+        desktop_modules = {'scripts/native_desktop.py', 'scripts/native_display_kde.py'}
+        if not desktop_modules & set(manifest['files']):
+            for name in desktop_modules:
+                inputs.pop(name, None)
+        if 'scripts/native_audio.py' not in manifest['files']:
+            inputs.pop('scripts/native_audio.py', None)
     if set(manifest['files']) != set(inputs):
         raise ValueError('Missing or unexpected bridge component')
     for name, expected in manifest['files'].items():

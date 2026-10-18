@@ -98,6 +98,19 @@ class ClientTests(unittest.TestCase):
                 self.assertNotEqual(status, 0)
                 self.assertEqual(output, b'Z' * SNAPSHOT_BYTES)
 
+    def test_kde_160hz_and_arbitrary_fractional_scale(self):
+        mode = dict(width=3840, height=2160, refresh=160, scales=[1.7])
+        value = dict(mode, ok=True, serial=7, scale=1.7, pending=False, modes=[mode])
+        status, output = self.exchange(json.dumps(value).encode())
+        self.assertEqual(status, 0)
+        snapshot = DisplaySnapshot.from_buffer_copy(output)
+        self.assertEqual(snapshot.current.refresh_millihz, 160000)
+        self.assertEqual(snapshot.current.scale_milli, 1700)
+        value['refresh'] = 361
+        status, output = self.exchange(json.dumps(value).encode())
+        self.assertNotEqual(status, 0)
+        self.assertEqual(output, b'Z' * SNAPSHOT_BYTES)
+
     def test_native_rejection_stays_an_error(self):
         for kind, status in [('ValueError', 3), ('RuntimeError', 4), ('DisplayDefaultWriteError', 5)]:
             actual, output = self.exchange(json.dumps(dict(ok=False, error_type=kind)).encode())

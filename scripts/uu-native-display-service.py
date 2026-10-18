@@ -12,7 +12,7 @@ import socket
 import stat
 import struct
 import time
-from native_display_config import MutterDisplay
+from native_desktop import display_backend
 from native_display_guardian import DisplayGuardian
 from native_runtime_state import read_private, notify
 
@@ -54,7 +54,7 @@ def run(config_path):
             if (current.st_dev, current.st_ino) != (old.st_dev, old.st_ino):
                 raise RuntimeError('Display endpoint changed during recovery')
             endpoint.unlink()
-        guardian = DisplayGuardian(MutterDisplay(), parent / 'display-transaction.json')
+        guardian = DisplayGuardian(display_backend(), parent / 'display-transaction.json')
         guardian.expire()
         listener = socket.socket(socket.AF_UNIX, socket.SOCK_SEQPACKET | socket.SOCK_CLOEXEC)
         listener.bind(str(endpoint)); endpoint.chmod(0o600); bound = endpoint.lstat()

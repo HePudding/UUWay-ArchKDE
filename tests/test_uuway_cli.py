@@ -44,7 +44,9 @@ class CliCase(unittest.TestCase):
             (self.checkout / "build/helpers" / name).write_bytes(NEW_PROXY if name == "uu-terminal-proxy.exe"
                                                                    else b"new-" + name.encode())
         for override in (patch.object(Path, "home", return_value=self.home),
-                         patch.object(cli, "ROOT", self.checkout)):
+                         patch.object(cli, "ROOT", self.checkout),
+                         patch.object(cli, "apt_wine_installation", return_value=True),
+                         patch.dict(os.environ, XDG_CURRENT_DESKTOP='GNOME', XDG_SESSION_TYPE='wayland')):
             override.start()
             self.addCleanup(override.stop)
         self.prefix = self.home / ".local/share/wineprefixes/uu-remote"
@@ -415,7 +417,10 @@ class EnvironmentTests(CliCase):
         with self.assertRaises(cli.SetupError):
             self.check({"XDG_SESSION_TYPE": "x11", "XDG_CURRENT_DESKTOP": "ubuntu:GNOME"})
         with self.assertRaises(cli.SetupError):
-            self.check({"XDG_SESSION_TYPE": "wayland", "XDG_CURRENT_DESKTOP": "KDE"})
+            self.check({"XDG_SESSION_TYPE": "wayland", "XDG_CURRENT_DESKTOP": "sway"})
+
+    def test_accepts_kde_wayland(self):
+        self.check({"XDG_SESSION_TYPE": "wayland", "XDG_CURRENT_DESKTOP": "KDE"})
 
     def test_refuses_a_machine_without_a_usable_nvidia_driver(self):
         with self.assertRaises(cli.SetupError):

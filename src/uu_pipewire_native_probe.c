@@ -23,6 +23,7 @@
 #include "native_capture_status.h"
 #include <sys/stat.h>
 #include <time.h>
+#include "native_pipewire_sync.h"
 
 struct probe {
     struct pw_main_loop *loop;
@@ -32,6 +33,7 @@ struct probe {
     unsigned frames, planes;
     uint32_t offsets[4], strides[4];
     int failed, negotiated;
+    int explicit_sync, sync_device;
     struct uurb_vk_importer *importer;
     unsigned imported;
     struct uurb_capture_encoder *encoder;
@@ -85,6 +87,30 @@ static void state_changed(void *opaque, enum pw_stream_state old,
     if (state == PW_STREAM_STATE_ERROR) fail(p, error ? error : "PipeWire stream error");
 }
 
+static int wait_frame(struct probe *p, struct pw_buffer *frame)
+{
+#ifdef UURB_PIPEWIRE_EXPLICIT_SYNC
+    if (p->explicit_sync && uurb_sync_frame(&p->sync_device, frame->buffer, 0)) {
+        fail(p, "PipeWire explicit acquire synchronization failed");
+        return -1;
+    }
+#else
+    (void)p; (void)frame;
+#endif
+    return 0;
+}
+
+static void return_frame(struct probe *p, struct pw_buffer *frame)
+{
+#ifdef UURB_PIPEWIRE_EXPLICIT_SYNC
+    if (p->explicit_sync && (wait_frame(p, frame) || uurb_sync_frame(&p->sync_device, frame->buffer, 1))) {
+        fail(p, "PipeWire explicit release synchronization failed");
+        return;
+    }
+#endif
+    pw_stream_queue_buffer(p->stream, frame);
+}
+
 static void format_changed(void *opaque, uint32_t id, const struct spa_pod *format)
 {
     struct probe *p = opaque;
@@ -112,9 +138,9 @@ static void format_changed(void *opaque, uint32_t id, const struct spa_pod *form
         p->publisher->max_rate_num = video.max_framerate.num;
         p->publisher->max_rate_den = video.max_framerate.denom;
     }
-    uint8_t storage[512];
+    uint8_t storage[1024];
     struct spa_pod_builder builder = SPA_POD_BUILDER_INIT(storage, sizeof(storage));
-    const struct spa_pod *params[] = {
+    const struct spa_pod *params[4] = {
         spa_pod_builder_add_object(&builder, SPA_TYPE_OBJECT_ParamBuffers, SPA_PARAM_Buffers,
             SPA_PARAM_BUFFERS_dataType, SPA_POD_Int(1u << SPA_DATA_DmaBuf)),
         spa_pod_builder_add_object(&builder, SPA_TYPE_OBJECT_ParamMeta, SPA_PARAM_Meta,
@@ -123,7 +149,22 @@ static void format_changed(void *opaque, uint32_t id, const struct spa_pod *form
         spa_pod_builder_add_object(&builder, SPA_TYPE_OBJECT_ParamMeta, SPA_PARAM_Meta,
             SPA_PARAM_META_type, SPA_POD_Id(SPA_META_Cursor),
             SPA_PARAM_META_size, SPA_POD_Int(sizeof(struct spa_meta_cursor) + sizeof(struct spa_meta_bitmap) + UURB_CURSOR_PIXEL_BYTES))};
-    if (pw_stream_update_params(p->stream, params, p->cursor ? 3 : 2) < 0) {
+    unsigned count = p->cursor ? 3 : 2;
+#ifdef UURB_PIPEWIRE_EXPLICIT_SYNC
+    if (p->explicit_sync) {
+        struct spa_pod_frame object;
+        spa_pod_builder_push_object(&builder, &object, SPA_TYPE_OBJECT_ParamBuffers, SPA_PARAM_Buffers);
+        spa_pod_builder_add(&builder, SPA_PARAM_BUFFERS_dataType, SPA_POD_Int(1u << SPA_DATA_DmaBuf),
+                            SPA_PARAM_BUFFERS_blocks, SPA_POD_Int(3), 0);
+        spa_pod_builder_prop(&builder, SPA_PARAM_BUFFERS_metaType, SPA_POD_PROP_FLAG_MANDATORY);
+        spa_pod_builder_int(&builder, 1u << SPA_META_SyncTimeline);
+        params[0] = spa_pod_builder_pop(&builder, &object);
+        params[count++] = spa_pod_builder_add_object(&builder, SPA_TYPE_OBJECT_ParamMeta, SPA_PARAM_Meta,
+            SPA_PARAM_META_type, SPA_POD_Id(SPA_META_SyncTimeline),
+            SPA_PARAM_META_size, SPA_POD_Int(sizeof(struct spa_meta_sync_timeline)));
+    }
+#endif
+    if (pw_stream_update_params(p->stream, params, count) < 0) {
         fail(p, "DMA-BUF buffer negotiation failed");
         return;
     }
@@ -150,6 +191,7 @@ static void record_delivery(struct probe *p, const struct spa_meta_header *heade
 
 static void process_frame(struct probe *p, struct pw_buffer *frame)
 {
+    if (wait_frame(p, frame)) return;
     struct spa_buffer *buffer = frame->buffer;
     /* Cursor-only buffers carry zero video bytes. Process their metadata before
      * deciding whether a GPU frame needs encoding. Never map desktop pixels. */
@@ -157,7 +199,7 @@ static void process_frame(struct probe *p, struct pw_buffer *frame)
         struct spa_meta *meta = spa_buffer_find_meta(buffer, SPA_META_Cursor);
         int update = meta ? uurb_cursor_metadata(p->cursor, meta->data, meta->size, p->cursor_mutter) : 0;
         if (update < 0) {
-            pw_stream_queue_buffer(p->stream, frame);
+            return_frame(p, frame);
             fail(p, "Invalid bounded cursor metadata");
             return;
         }
@@ -172,24 +214,25 @@ static void process_frame(struct probe *p, struct pw_buffer *frame)
                 if (!header || header->pts < 0 || (header->flags & SPA_META_HEADER_FLAG_DISCONT) ||
                     clock_gettime(CLOCK_MONOTONIC, &now) < 0 ||
                     uurb_capture_encoder_cursor_frame(p->encoder, (uint64_t)header->pts)) {
-                    pw_stream_queue_buffer(p->stream, frame);
+                    return_frame(p, frame);
                     fail(p, "Cursor-only GPU delivery requires valid source PTS and retained background");
                     return;
                 }
                 record_delivery(p, header, (uint64_t)now.tv_sec * 1000000000ull + now.tv_nsec);
                 p->cursor_frames++;
             }
-            pw_stream_queue_buffer(p->stream, frame);
+            return_frame(p, frame);
             return;
         }
     }
-    int valid = p->negotiated && buffer && buffer->n_datas && buffer->n_datas <= 4;
+    unsigned video_planes = buffer ? buffer->n_datas - (p->explicit_sync ? 2 : 0) : 0;
+    int valid = p->negotiated && buffer && video_planes && video_planes <= 4;
     const struct spa_meta_header *header = buffer ?
         spa_buffer_find_meta_data(buffer, SPA_META_Header, sizeof(struct spa_meta_header)) : NULL;
     if (header && (header->flags & SPA_META_HEADER_FLAG_CORRUPTED)) valid = 0;
     /* Empty frame notifications are not captured frames. */
     int empty = 0;
-    for (unsigned i = 0; valid && i < buffer->n_datas; i++) {
+    for (unsigned i = 0; valid && i < video_planes; i++) {
         struct spa_data *plane = &buffer->datas[i];
         if (plane->type != SPA_DATA_DmaBuf || plane->fd < 0 || plane->fd > INT_MAX ||
             fcntl((int)plane->fd, F_GETFD) < 0 || !plane->chunk ||
@@ -203,7 +246,7 @@ static void process_frame(struct probe *p, struct pw_buffer *frame)
         p->strides[i] = plane->chunk->stride;
     }
     if (valid && !empty && p->importer) {
-        if (buffer->n_datas != 1 || uurb_vk_importer_check(p->importer, buffer->datas[0].fd,
+        if (video_planes != 1 || uurb_vk_importer_check(p->importer, buffer->datas[0].fd,
             p->video.size.width, p->video.size.height, fourcc(p->video.format),
             p->video.modifier, p->offsets[0], p->strides[0])) valid = 0;
         else p->imported++;
@@ -215,7 +258,7 @@ static void process_frame(struct probe *p, struct pw_buffer *frame)
         if (!header || header->pts < 0 || (p->frames && (header->flags & SPA_META_HEADER_FLAG_DISCONT))) {
             fprintf(stderr, "Encoding requires continuous PipeWire source PTS; refusing a substituted clock\n");
             valid = 0;
-        } else if (buffer->n_datas != 1 ||
+        } else if (video_planes != 1 ||
             uurb_capture_encoder_frame(p->encoder, frame, buffer->datas[0].fd, p->video.size.width,
                 p->video.size.height, fourcc(p->video.format), p->video.modifier, p->offsets[0], p->strides[0],
                 (uint64_t)header->pts)) valid = 0;
@@ -230,9 +273,9 @@ static void process_frame(struct probe *p, struct pw_buffer *frame)
             p->status_fd = -1;
         }
         record_delivery(p, header, delivered_ns);
-        p->planes = buffer->n_datas;
+        p->planes = video_planes;
     }
-    pw_stream_queue_buffer(p->stream, frame);
+    return_frame(p, frame);
     if (!valid) fail(p, "Invalid/non-DMA-BUF plane metadata; refusing fallback");
 }
 
@@ -243,7 +286,7 @@ static int carries_video(struct pw_buffer *frame)
 {
     struct spa_buffer *buffer = frame->buffer;
     if (!buffer || !buffer->n_datas || buffer->n_datas > 4) return 0;
-    for (uint32_t i = 0; i < buffer->n_datas; i++)
+    for (uint32_t i = 0; i < buffer->n_datas && buffer->datas[i].type == SPA_DATA_DmaBuf; i++)
         if (!buffer->datas[i].chunk || !buffer->datas[i].chunk->size ||
             (buffer->datas[i].chunk->flags & SPA_CHUNK_FLAG_CORRUPTED)) return 0;
     return 1;
@@ -256,7 +299,7 @@ static void supersede_frame(struct probe *p, struct pw_buffer *frame)
     struct spa_buffer *buffer = frame->buffer;
     struct spa_meta *meta = p->cursor && buffer ? spa_buffer_find_meta(buffer, SPA_META_Cursor) : NULL;
     int update = meta ? uurb_cursor_metadata(p->cursor, meta->data, meta->size, p->cursor_mutter) : 0;
-    pw_stream_queue_buffer(p->stream, frame);
+    return_frame(p, frame);
     if (update < 0) { fail(p, "Invalid bounded cursor metadata"); return; }
     p->cursor_updates += update;
     p->superseded++;
@@ -280,7 +323,7 @@ static void process(void *opaque)
         for (unsigned i = count; i-- > 0;)
             if (carries_video(queued[i])) { newest = i; break; }
     for (unsigned i = 0; i < count; i++) {
-        if (p->failed) pw_stream_queue_buffer(p->stream, queued[i]);
+        if (p->failed) return_frame(p, queued[i]);
         else if (i < newest) supersede_frame(p, queued[i]);
         else process_frame(p, queued[i]);
     }
@@ -485,7 +528,10 @@ int main(int argc, char **argv)
     }
     if (!nparams) { fprintf(stderr, "No sampleable explicit Vulkan modifiers\n"); goto vulkan_done; }
     pw_init(NULL, NULL);
-    struct probe p = {.status_fd = status_fd, .publisher = relay ? &publisher : NULL};
+    struct probe p = {.status_fd = status_fd, .publisher = relay ? &publisher : NULL, .sync_device = -1};
+#ifdef UURB_PIPEWIRE_EXPLICIT_SYNC
+    p.explicit_sync = getenv("UURB_CAPTURE_EXPLICIT_SYNC") && !strcmp(getenv("UURB_CAPTURE_EXPLICIT_SYNC"), "1");
+#endif
     struct pw_context *context = NULL;
     struct pw_core *core = NULL;
     struct spa_source *deadline = NULL, *termination = NULL, *interruption = NULL;
@@ -562,10 +608,10 @@ int main(int argc, char **argv)
     if (relay && !p.failed && uurb_gpu_publish_end(&publisher)) p.failed = 1;
     if (!p.failed && p.frames && !validation_errors) {
         struct uurb_capture_stats stats = uurb_capture_encoder_stats(p.encoder);
-        printf("{\"frames\":%u,\"width\":%u,\"height\":%u,\"spa_format\":%u,\"drm_fourcc\":%u,"
+        printf("{\"explicit_sync\":%s,\"frames\":%u,\"width\":%u,\"height\":%u,\"spa_format\":%u,\"drm_fourcc\":%u,"
                "\"drm_modifier\":\"0x%016" PRIx64 "\",\"memory_planes\":%u,"
                "\"dmabuf_only\":true,\"pixels_mapped\":false,\"gpu_relayed\":%s,\"encoded\":%s,\"codec\":\"%s\",\"vulkan_imported_frames\":%u,\"validation_enabled\":%s,\"planes\":[",
-               p.frames, p.video.size.width, p.video.size.height, p.video.format, fourcc(p.video.format), p.video.modifier, p.planes,
+               p.explicit_sync ? "true" : "false", p.frames, p.video.size.width, p.video.size.height, p.video.format, fourcc(p.video.format), p.video.modifier, p.planes,
                relay ? "true" : "false", encode ? "true" : "false", encode ? (p.hevc ? "hevc" : "h264") : "none", (encode || relay) ? p.frames : p.imported,
                validate ? "true" : "false");
         for (unsigned i = 0; i < p.planes; i++)
@@ -589,6 +635,7 @@ int main(int argc, char **argv)
         result = 0;
     } else fprintf(stderr, "Native capture did not deliver valid DMA-BUF frames\n");
 pw_done:
+    if (p.sync_device >= 0) close(p.sync_device);
     fprintf(stderr, "UURB_CURSOR_METADATA {\"updates\":%u}\n", p.cursor_updates);
     if (p.cursor_composite)
         fprintf(stderr, "UURB_CURSOR_COMPOSITE {\"cursor_only_frames\":%u,\"desktop_frames\":%u}\n",

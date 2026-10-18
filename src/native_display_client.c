@@ -106,7 +106,7 @@ static int mode(struct json_object *object, struct uurb_display_mode *value, int
     if (!object || json_object_get_type(object) != json_type_object ||
         !integer(object, "width", &value->width) || !integer(object, "height", &value->height) ||
         value->width < 2 || value->height < 2 || value->width > 4096 || value->height > 4096 ||
-        value->width % 2 || value->height % 2 || !number(object, "refresh", 1, 120, &refresh) ||
+        value->width % 2 || value->height % 2 || !number(object, "refresh", 1, 360, &refresh) ||
         (current && !number(object, "scale", 0.5, 4, &scale))) return 0;
     value->refresh_millihz = (uint32_t)(refresh * 1000 + 0.5);
     value->scale_milli = (uint32_t)(scale * 1000 + 0.5);
@@ -198,7 +198,7 @@ int uurb_native_display_change(const char *path, const struct uurb_display_reque
         request->operation < UURB_DISPLAY_VERIFY || request->operation > UURB_DISPLAY_APPLY_GLOBAL_DEFAULT ||
         (request->operation == UURB_DISPLAY_VERIFY && request->reserved) ||
         request->width < 2 || request->height < 2 || request->width > 4096 || request->height > 4096 ||
-        request->width % 2 || request->height % 2 || request->refresh_millihz > 120000 ||
+        request->width % 2 || request->height % 2 || request->refresh_millihz > 360000 ||
         (request->scale_milli && (request->scale_milli < 500 || request->scale_milli > 4000))) return UURB_DISPLAY_INVALID;
     char packet[384], scale[48] = "";
     if (request->scale_milli) snprintf(scale, sizeof(scale), ",\"scale\":%u.%03u", request->scale_milli / 1000, request->scale_milli % 1000);

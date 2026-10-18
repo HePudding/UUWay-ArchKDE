@@ -110,7 +110,7 @@ static BOOL native_display_current_mode(struct uurb_display_mode *mode)
     if (ok) *mode=native_display_cache.current;
     ReleaseSRWLockExclusive(&native_display_cache_lock);
     return ok && mode->width>=2 && mode->height>=2 && mode->width<=8192 && mode->height<=8192 &&
-        !(mode->width&1) && !(mode->height&1) && mode->refresh_millihz>=1000 && mode->refresh_millihz<=120000;
+        !(mode->width&1) && !(mode->height&1) && mode->refresh_millihz>=1000 && mode->refresh_millihz<=360000;
 }
 static RECT native_display_pixel_rect(const struct uurb_display_mode *mode)
 { return (RECT){0,0,(LONG)mode->width,(LONG)mode->height}; }

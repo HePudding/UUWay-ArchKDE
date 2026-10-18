@@ -373,6 +373,9 @@ def main():
                 command.extend(['--gpu-relay', str(args.gpu_relay_fd)])
                 inherited += (args.gpu_relay_fd,)
             capture_env = dict(os.environ, UURB_CAPTURE_DURATION_SECONDS=str(args.duration_seconds))
+            from native_desktop import is_kde
+            if is_kde():
+                capture_env.setdefault('UURB_CAPTURE_EXPLICIT_SYNC', '1')
             capture_env.pop('UURB_CAPTURE_STATUS_FD', None)
             if args.capture_status_fd is not None:
                 inherited += (args.capture_status_fd,)

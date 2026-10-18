@@ -139,7 +139,7 @@ static LONG native_display_change_mode(LPCWSTR device, DEVMODEW *mode, HWND wind
         if (mode->dmFields & DM_PELSWIDTH) request.width = mode->dmPelsWidth;
         if (mode->dmFields & DM_PELSHEIGHT) request.height = mode->dmPelsHeight;
         if (mode->dmFields & DM_DISPLAYFREQUENCY) {
-            if (mode->dmDisplayFrequency > 120) { result = DISP_CHANGE_BADMODE; goto done; }
+            if (mode->dmDisplayFrequency > 360) { result = DISP_CHANGE_BADMODE; goto done; }
             request.refresh_millihz = mode->dmDisplayFrequency <= 1 ? 0 : mode->dmDisplayFrequency * 1000;
         }
     }

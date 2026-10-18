@@ -31,6 +31,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import uuway_update  # noqa: E402
 import uuway_update_apply as update_checks  # noqa: E402
+from native_desktop import supported_session, is_kde
 
 PYTHON = '/usr/bin/python3'
 WINE_DIR = Path('/opt/wine-stable/bin')
@@ -269,9 +270,9 @@ def check_environment(ctx):
         warn(f'UUWay 只在 Ubuntu 24.04 上验证过（当前：{release.get("PRETTY_NAME", "未知")}），继续但不保证可用。')
     session = os.environ.get('XDG_SESSION_TYPE', '')
     desktop = os.environ.get('XDG_CURRENT_DESKTOP', '')
-    if session != 'wayland' or 'GNOME' not in desktop:
-        raise SetupError(f'请在 GNOME Wayland 会话里运行（当前会话：{session or "未知"} / {desktop or "未知"}）。')
-    ok('GNOME Wayland 会话')
+    if not supported_session():
+        raise SetupError(f'请在 GNOME 或 KDE Wayland 会话里运行（当前会话：{session or "未知"} / {desktop or "未知"}）。')
+    ok('KDE Wayland 会话（实验性适配）' if is_kde() else 'GNOME Wayland 会话')
     backend = select_backend(ctx)
     ctx.backend = backend
     if backend == 'amd':
@@ -377,9 +378,13 @@ def backend_for_context(ctx):
 
 # --------------------------------------------------------------------- step: wine
 
+def apt_wine_installation():
+    return bool(shutil.which('apt-get'))
+
+
 def wine_done(ctx):
     version = wine_version(ctx)
-    return bool(version) and version.startswith(WINE_SERIES) and WINE_PIN.is_file()
+    return bool(version) and version.startswith(WINE_SERIES) and (not apt_wine_installation() or WINE_PIN.is_file())
 
 
 def wine_pin_command(ctx):
@@ -389,6 +394,11 @@ def wine_pin_command(ctx):
 
 def wine_run(ctx):
     version = wine_version(ctx)
+    if not apt_wine_installation():
+        if version and version.startswith(WINE_SERIES):
+            ok('独立 Wine 11.0 运行时；不修改系统包管理器配置')
+            return
+        raise SetupError('当前系统不支持 WineHQ apt 安装；请先在 /opt/wine-stable 安装独立的 Wine 11.0 运行时。')
     if version and version.startswith(WINE_SERIES):
         info('WineHQ 已是 11.0。还差把它固定在 11.0 系列，免得 apt upgrade 悄悄升到不兼容的版本。')
         if ctx.confirm(f'现在用 sudo 写入 {WINE_PIN}？'):
@@ -491,7 +501,7 @@ def open_uu(ctx):
     executable = r'C:\Program Files\Netease\GameViewer\GameViewer.exe'
     env = ctx.wine_env()
     argv = [str(wine), executable]
-    if backend_for_context(ctx) == 'amd':
+    if backend_for_context(ctx) == 'amd' or is_kde():
         if unit_active(ctx, 'uu-native-bridge'):
             raise SetupError('UU 后台运行在独立显示中，无法在桌面打开它的窗口。需要重新登录时请运行 uuway setup --login。')
         stage = ctx.state_dir / 'login-support'
@@ -499,7 +509,7 @@ def open_uu(ctx):
             stage.mkdir(parents=True, exist_ok=True, mode=0o700)
             for source, target in [('uu-native-bootstrap.exe', 'bootstrap.exe'),
                                    ('uu-native-winlogon.exe', 'winlogon.exe')]:
-                shutil.copy2((backend_root('amd') or ROOT / 'build') / 'native-presenter' / source,
+                shutil.copy2((backend_root(backend_for_context(ctx)) or ROOT / 'build') / 'native-presenter' / source,
                              stage / target)
         argv = [str(wine), str(stage / 'bootstrap.exe'), '--login', executable,
                 'UURB-NATIVE-LOGIN-AMD']
@@ -1270,7 +1280,7 @@ def command_doctor(args):
 
     session = os.environ.get('XDG_SESSION_TYPE', '')
     desktop = os.environ.get('XDG_CURRENT_DESKTOP', '')
-    check('ok' if session == 'wayland' and 'GNOME' in desktop else 'fail', 'GNOME Wayland 会话',
+    check('ok' if supported_session() else 'fail', 'GNOME / KDE Wayland 会话',
           f'{session or "?"} / {desktop or "?"}')
     try:
         backend = select_backend(ctx)
@@ -1302,7 +1312,7 @@ def command_doctor(args):
     version = wine_version(ctx)
     check('ok' if version and version.startswith(WINE_SERIES) else 'fail', 'WineHQ stable 11.0',
           version or '没有找到 /opt/wine-stable/bin/wine（运行 uuway setup）')
-    if version and version.startswith(WINE_SERIES):
+    if version and version.startswith(WINE_SERIES) and apt_wine_installation():
         check('ok' if WINE_PIN.is_file() else 'warn', 'WineHQ 已固定在 11.0 系列',
               str(WINE_PIN) if WINE_PIN.is_file() else '升级 WineHQ 可能让 UUWay 无法采集画面；运行 uuway setup --only wine')
     check('ok' if uinput_usable() else 'fail', '/dev/uinput 可写', '' if uinput_usable()

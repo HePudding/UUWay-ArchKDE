@@ -47,7 +47,7 @@ class DisplayGuardian:
         if (not isinstance(value, dict) or set(value) != {'width', 'height', 'refresh', 'scale', 'scope'} or
             any(type(value[k]) is not int or not 2 <= value[k] <= 4096 or value[k] % 2 for k in ('width', 'height')) or
             any(type(value[k]) not in (int, float) or not math.isfinite(value[k]) for k in ('refresh', 'scale')) or
-            not 1 <= value['refresh'] <= 120 or not 0.5 <= value['scale'] <= 4 or value['scope'] not in ('user', 'global')):
+            not 1 <= value['refresh'] <= 360 or not 0.5 <= value['scale'] <= 4 or value['scope'] not in ('user', 'global')):
             raise ValueError('Unreviewed UU display default')
         return dict(value)
 

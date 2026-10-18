@@ -39,7 +39,7 @@ def decode_state(reply):
     for identifier, width, height, refresh, preferred_scale, scales, flags in entries:
         supported = (isinstance(identifier, str) and 0 < len(identifier) <= 128 and
                      2 <= width <= 4096 and 2 <= height <= 4096 and not width % 2 and not height % 2 and
-                     math.isfinite(refresh) and 1 <= refresh <= 120 and not flags.get('is-interlaced', False) and
+                     math.isfinite(refresh) and 1 <= refresh <= 360 and not flags.get('is-interlaced', False) and
                      flags.get('refresh-rate-mode', 'fixed') == 'fixed')
         if flags.get('is-current') and not supported:
             raise ValueError('Current display mode is outside the native bridge scope')

@@ -344,6 +344,10 @@ def recover_interrupted(prefix, state_parent):
 
 
 def native_topology():
+    from native_desktop import is_kde
+    if is_kde():
+        from native_display_kde import KScreenDisplay
+        return KScreenDisplay().topology()
     # Use the distribution Python owning dbus, independent of the caller's
     # virtualenv. Output only display geometry, never monitor serial numbers.
     code = '''import dbus,json

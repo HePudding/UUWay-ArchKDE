@@ -63,7 +63,21 @@ UUWay 是一层**适配层**：UU 照常调用它在任何一台 Windows 电脑�
 
 更多细节见[设计说明](docs/design.md)（英文）。
 
-## 🚀 安装
+## Arch Linux + KDE Wayland（本 fork 的实验性适配）
+
+本 fork 新增 KDE 单显示器适配，已在 Arch Linux、Plasma 6.8、RTX 5070 Ti 上验证屏幕采集、键鼠和手机中文输入。
+保留本机 4K 160Hz / 170% 缩放；显示桥接接受最高 360Hz 的实际模式，不代表远端能以该帧率播放。
+KDE 目前只枚举本机当前模式，不支持从远端改变分辨率、刷新率或缩放；不支持多显示器、旋转和 HDR。
+
+```bash
+python scripts/prepare-arch.py
+python scripts/uuway_cli.py setup --installer /path/to/UURemote_Setup.exe
+```
+
+准备脚本下载并校验固定版本的上游运行时和独立 Wine 11.0，再从本 fork 重编译改动组件。
+安装时仍需本人登录 UU、允许屏幕和文字服务授权。细节和验证范围见 [Arch / KDE 安装说明](docs/arch-kde.md)。
+
+## 🚀 原上游 Ubuntu 安装方式
 
 发布包同时携带 NVIDIA 和 AMD 两套运行时。**`uuway setup` 和 `install.sh` 会先探测 NVIDIA NVENC，失败后验证 AMD VA-API H.264/HEVC，并固定首次成功的选择；不会自动安装或切换显卡驱动。** 可用 `UURB_BACKEND=nvidia|amd` 做诊断覆盖。
 

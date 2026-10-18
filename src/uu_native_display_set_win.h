@@ -51,7 +51,7 @@ static LONG native_display_plan_set(UINT32 paths, const DISPLAYCONFIG_PATH_INFO 
     if ((!rate.Numerator)!=(!rate.Denominator)) return ERROR_INVALID_PARAMETER;
     if (!rate.Numerator && (signal || scan!=DISPLAYCONFIG_SCANLINE_ORDERING_UNSPECIFIED)) return ERROR_INVALID_PARAMETER;
     UINT64 millihz=rate.Denominator ? ((UINT64)rate.Numerator*1000+rate.Denominator/2)/rate.Denominator : 0;
-    if (rate.Denominator && (millihz<1000 || millihz>120000)) return ERROR_BAD_CONFIGURATION;
+    if (rate.Denominator && (millihz<1000 || millihz>360000)) return ERROR_BAD_CONFIGURATION;
     if (scan!=DISPLAYCONFIG_SCANLINE_ORDERING_PROGRESSIVE &&
         scan!=DISPLAYCONFIG_SCANLINE_ORDERING_UNSPECIFIED) return ERROR_NOT_SUPPORTED;
     if (target_present && !(flags&SDC_ALLOW_CHANGES)) {

@@ -242,8 +242,8 @@ def producer_command(restore_state, channel, duration, cursor_mode, cursor_fd=No
             '--gpu-relay-fd', str(channel), '--duration-seconds', str(duration),
             '--cursor-mode', cursor_mode]
     if cursor_fd is not None:
-        # This native trial is scoped to Mutter DisplayConfig / one monitor.
-        command.extend(['--cursor-backend', 'mutter'])
+        from native_desktop import is_kde
+        command.extend(['--cursor-backend', 'spa' if is_kde() else 'mutter'])
         command.extend(['--cursor-state-fd', str(cursor_fd)])
     if status_fd is not None:
         if status_fd < 3 or status_fd in (channel, cursor_fd):
