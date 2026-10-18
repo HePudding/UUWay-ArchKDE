@@ -1,5 +1,7 @@
 <div align="center">
 
+<h1>UUWay-ArchKDE</h1>
+
 <img src="docs/images/hero.en.svg" alt="UUWay: a native Linux host for NetEase UU Remote" width="100%">
 
 [简体中文](README.md) · [English](README.en.md)

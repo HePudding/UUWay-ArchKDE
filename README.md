@@ -1,5 +1,7 @@
 <div align="center">
 
+<h1>UUWay-ArchKDE</h1>
+
 <img src="docs/images/hero.zh.svg" alt="UUWay：网易 UU 远程 Linux 原生被控端" width="100%">
 
 [简体中文](README.md) · [English](README.en.md)
@@ -78,8 +80,8 @@ KDE 目前只枚举本机当前模式，不支持从远端改变分辨率、刷�
 准备好支持 NVENC 的 NVIDIA 驱动，并启用 Arch 的 multilib 软件仓库。以普通用户运行：
 
 ```bash
-git clone https://github.com/HePudding/UUWay.git
-cd UUWay
+git clone https://github.com/HePudding/UUWay-ArchKDE.git
+cd UUWay-ArchKDE
 python scripts/prepare-arch.py
 python scripts/uuway_cli.py setup --installer /path/to/UURemote_Setup.exe
 ```
