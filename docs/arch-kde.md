@@ -85,7 +85,8 @@ now skips these video contents and ignores the two syncobj descriptors when
 classifying a cursor-only buffer. Previously these events restarted capture,
 causing flicker and clearing the pointer state on every mouse movement. That
 classification fix alone did not resolve the controller's report; the deployed
-configuration now uses the embedded cursor path pending verification.
+configuration now uses the embedded cursor path. The user confirmed that pointer
+visibility and pointer-motion flicker are fully resolved in this mode.
 Multi-output, HDR, remote mode changes and AMD on KDE
 remain unverified or unsupported.
 
