@@ -71,9 +71,13 @@ The original DMA-BUF/NVENC path encoded and independently decoded 1,131 live fra
 the explicit sync path also passed live H.264 encode/decode. This is local capture
 evidence, not a promise of 160 remote frames per second.
 
-The user confirmed remote video, mouse/keyboard and phone IME text. Dynamic-video
-flicker and system-audio routing require controller-side retesting after the
-explicit-sync/audio changes. Multi-output, HDR, remote mode changes and AMD on KDE
+The user confirmed remote video, mouse/keyboard, phone IME text and system audio.
+KWin's cursor-only notifications retain the allocated video byte count and mark
+the video chunk `CORRUPTED`; their cursor metadata is still valid. The consumer
+now skips these video contents and ignores the two syncobj descriptors when
+classifying a cursor-only buffer. Previously these events restarted capture,
+causing flicker and clearing the pointer state on every mouse movement. This
+follow-up fix requires controller-side retesting. Multi-output, HDR, remote mode changes and AMD on KDE
 remain unverified or unsupported.
 
 The targeted regression suite covers CLI setup, desktop selection, high-refresh

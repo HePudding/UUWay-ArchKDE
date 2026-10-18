@@ -38,12 +38,25 @@ int uurb_cursor_only_buffer(struct spa_buffer *buffer)
         !spa_buffer_find_meta_data(buffer, SPA_META_Cursor, sizeof(struct spa_meta_cursor))) return 0;
     struct spa_meta_header *header = spa_buffer_find_meta_data(buffer, SPA_META_Header, sizeof(*header));
     if (!header || (header->flags & SPA_META_HEADER_FLAG_CORRUPTED)) return 0;
-    for (uint32_t i = 0; i < buffer->n_datas; ++i)
-        if (!buffer->datas[i].chunk || buffer->datas[i].chunk->size) return 0;
+    unsigned video_planes = 0;
+    for (uint32_t i = 0; i < buffer->n_datas; ++i) {
+#ifdef UURB_PIPEWIRE_EXPLICIT_SYNC
+        /* The two timeline descriptors have no video chunks. */
+        if (buffer->datas[i].type == SPA_DATA_SyncObj) {
+            if (buffer->n_datas != 3 || i == 0) return 0;
+            continue;
+        }
+#endif
+        const struct spa_chunk *chunk = buffer->datas[i].chunk;
+        if (!chunk || (chunk->size && !(chunk->flags & SPA_CHUNK_FLAG_CORRUPTED))) return 0;
+        ++video_planes;
+    }
     /* Mutter 46 deliberately marks zero-size cursor-only VIDEO chunks as
      * CORRUPTED. That flag must not discard valid independent cursor metadata.
      * No video FD/stride is consumed on this path, and no frame is encoded. */
-    return 1;
+    /* KWin retains the allocated byte count and marks cursor-only contents
+     * CORRUPTED. This is a valid cursor update, not damaged video to import. */
+    return video_planes != 0;
 }
 
 int uurb_cursor_metadata(struct uurb_cursor_snapshot *state, const void *data, size_t size, int mutter)

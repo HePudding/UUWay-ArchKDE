@@ -7,6 +7,9 @@ import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
 BINARY = Path(os.environ.get('UURB_TEST_CAPTURE_BINARY', str(ROOT / 'build/native-presenter/uu-pipewire-native-probe')))
+SPA_HEADERS = ROOT / 'build/portal-recovery/sysroot/usr/include/spa-0.2'
+if not SPA_HEADERS.is_dir():
+    SPA_HEADERS = Path('/usr/include/spa-0.2')
 
 
 class NativePipewireProbeTests(unittest.TestCase):
@@ -34,13 +37,14 @@ class NativePipewireProbeTests(unittest.TestCase):
                 '-o', executable], check=True, capture_output=True, timeout=15)
             subprocess.run([executable], check=True, capture_output=True, timeout=5)
 
-    @unittest.skipUnless((ROOT / 'build/portal-recovery/sysroot/usr/include/spa-0.2').is_dir(),
-                         'Build the portal sysroot first (scripts/build-portal-lifetime.sh)')
+    @unittest.skipUnless(SPA_HEADERS.is_dir(), 'Install SPA headers or build the portal sysroot')
     def test_bounded_cursor_metadata_without_video_pixel_mapping(self):
         with tempfile.TemporaryDirectory() as temporary:
             executable = str(Path(temporary) / 'cursor')
+            flags = (['-DUURB_PIPEWIRE_EXPLICIT_SYNC'] if 'SPA_DATA_SyncObj' in
+                     (SPA_HEADERS / 'spa/buffer/buffer.h').read_text() else [])
             subprocess.run(['gcc', '-std=gnu11', '-Wall', '-Wextra', '-Werror',
-                '-I', str(ROOT / 'src'), '-isystem', str(ROOT / 'build/portal-recovery/sysroot/usr/include/spa-0.2'),
+                *flags, '-I', str(ROOT / 'src'), '-isystem', str(SPA_HEADERS),
                 str(ROOT / 'src/native_cursor_metadata.c'), str(ROOT / 'tests/probes/native_cursor_metadata.c'),
                 '-o', executable], check=True, capture_output=True, timeout=15)
             subprocess.run([executable], check=True, capture_output=True, timeout=5)

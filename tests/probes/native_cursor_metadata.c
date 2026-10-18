@@ -70,7 +70,21 @@ int main(void)
     struct spa_buffer buffer = {.n_metas = 2, .metas = metas, .n_datas = 1, .datas = &plane};
     assert(uurb_cursor_only_buffer(&buffer));
     chunk.size = 1;
+    assert(uurb_cursor_only_buffer(&buffer)); // KWin retains size, marks video invalid.
+    chunk.flags = 0;
     assert(!uurb_cursor_only_buffer(&buffer));
+    chunk.flags = SPA_CHUNK_FLAG_CORRUPTED;
+#ifdef UURB_PIPEWIRE_EXPLICIT_SYNC
+    struct spa_data explicit_planes[] = {
+        {.type = SPA_DATA_DmaBuf, .chunk = &chunk},
+        {.type = SPA_DATA_SyncObj}, {.type = SPA_DATA_SyncObj}};
+    buffer.n_datas = 3; buffer.datas = explicit_planes;
+    assert(uurb_cursor_only_buffer(&buffer));
+    chunk.flags = 0;
+    assert(!uurb_cursor_only_buffer(&buffer));
+    chunk.flags = SPA_CHUNK_FLAG_CORRUPTED;
+    buffer.n_datas = 1; buffer.datas = &plane;
+#endif
     chunk.size = 0; header.flags = SPA_META_HEADER_FLAG_CORRUPTED;
     assert(!uurb_cursor_only_buffer(&buffer));
     free(before); free(state);
