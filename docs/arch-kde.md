@@ -49,6 +49,13 @@ Do not use `uuway update install` on Arch: that upstream updater installs Debian
 
 ## Capture and audio
 
+KDE defaults to an embedded cursor: KWin draws the real pointer into the captured
+image. The experimental metadata cursor path still restarted capture during
+pointer-only movement after the cursor-only chunk fix, so it is not the KDE
+default. Existing installations preserve their saved cursor policy; select
+`embedded` in the UUWay console to use this path. This does not disable pointer
+acceleration. The physical and virtual pointers have independent KDE settings.
+
 KDE capture negotiates `SPA_META_SyncTimeline` and the two extra syncobj descriptors.
 The consumer waits for the producer's acquire point before reading the frame and
 signals release after its synchronous GPU read. Superseded and cursor-only buffers
@@ -76,8 +83,10 @@ KWin's cursor-only notifications retain the allocated video byte count and mark
 the video chunk `CORRUPTED`; their cursor metadata is still valid. The consumer
 now skips these video contents and ignores the two syncobj descriptors when
 classifying a cursor-only buffer. Previously these events restarted capture,
-causing flicker and clearing the pointer state on every mouse movement. This
-follow-up fix requires controller-side retesting. Multi-output, HDR, remote mode changes and AMD on KDE
+causing flicker and clearing the pointer state on every mouse movement. That
+classification fix alone did not resolve the controller's report; the deployed
+configuration now uses the embedded cursor path pending verification.
+Multi-output, HDR, remote mode changes and AMD on KDE
 remain unverified or unsupported.
 
 The targeted regression suite covers CLI setup, desktop selection, high-refresh

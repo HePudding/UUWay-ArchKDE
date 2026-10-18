@@ -193,6 +193,12 @@ class RuntimeStepTests(CliCase):
         self.assertNotIn("--cursor-mode", command)
         self.assertNotIn("--preserve-display-session", command)
 
+    def test_fresh_kde_install_embeds_cursor_until_metadata_path_is_verified(self):
+        with patch.dict(os.environ, XDG_CURRENT_DESKTOP='KDE'):
+            self.run_runtime()
+        command = self.install_command()
+        self.assertEqual(command[command.index('--cursor-mode') + 1], 'embedded')
+
     def test_bridge_is_stopped_before_files_change_and_units_reload_after(self):
         self.run_runtime(bridge_active=True)
         kinds = [next((tag for tag in ("stop", "install-uu", "configure-uu", "daemon-reload") if tag in " ".join(c)),

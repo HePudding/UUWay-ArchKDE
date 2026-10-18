@@ -803,7 +803,7 @@ def runtime_run(ctx):
                '--backend', ctx.backend]
     if not ctx.runtime_config.exists():
         # A re-run must keep what the console saved, so these only go in on a fresh install.
-        command += ['--cursor-mode', 'metadata', '--preserve-display-session']
+        command += ['--cursor-mode', 'embedded' if is_kde() else 'metadata', '--preserve-display-session']
     ctx.run(command)
     # Wine's Linux path view is applied while the bridge is stopped, and the short-lived
     # wineserver the registry update starts is reaped before the bridge's Wine starts.
